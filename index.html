@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flashcards Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+    }
+    .card {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      background: #f9f9f9;
+    }
+    .question {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>📘 PDF to Flashcards</h1>
+  
+  <form id="flashcardForm">
+    <label for="pdf">Choose a PDF:</label>
+    <input type="file" id="pdf" name="pdf" accept="application/pdf" required>
+    <br><br>
+    
+    <label for="num">Number of flashcards:</label>
+    <input type="number" id="num" name="num_flashcards" value="5" min="1" max="100">
+    <br><br>
+    
+    <button type="submit">Generate Flashcards</button>
+  </form>
+  
+  <h2>Generated Flashcards</h2>
+  <div id="results"></div>
+
+  <script>
+    document.getElementById("flashcardForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData();
+      formData.append("pdf", document.getElementById("pdf").files[0]);
+      formData.append("num_flashcards", document.getElementById("num").value);
+
+      const response = await fetch("https://flashcards-backend-v36o.onrender.com/generate_flashcards", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+      console.log(data);
+
+      const container = document.getElementById("results");
+      container.innerHTML = "";
+
+      try {
+        // Parse flashcards if backend returned JSON as string
+        const flashcards = typeof data.flashcards === "string"
+          ? JSON.parse(data.flashcards)
+          : data.flashcards;
+
+        flashcards.forEach(fc => {
+          const card = document.createElement("div");
+          card.classList.add("card");
+          card.innerHTML = `<div class="question">Q: ${fc.question}</div><div>A: ${fc.answer}</div>`;
+          container.appendChild(card);
+        });
+      } catch (err) {
+        container.innerHTML = "<p style='color:red;'>Error parsing flashcards!</p>";
+      }
+    });
+  </script>
+</body>
+</html>
