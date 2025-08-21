@@ -182,8 +182,10 @@
       <button class="btn" id="closeChooser">Close</button>
     </div>
   </dialog>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <script>
+    
     /************ CONFIG ************/
     const BASE_URL = "https://flashcards-backend-v36o.onrender.com"; // change if needed
 
@@ -355,41 +357,58 @@
     document.getElementById("topicToggle").onchange = function() {
   document.getElementById("topicWrapper").style.display = this.checked ? "block" : "none";
 };
-    genBtn.onclick = async () => {
-  const file = pdfInput.files?.[0];
-  const n = parseInt(numInput.value||"10", 10);
-  const topicEnabled = document.getElementById("topicToggle").checked;
-  const topic = document.getElementById("topicInput").value;
+    async function extractPdfText(file, topic, maxChars = 2000) {
+  const pdfData = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+  let text = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(it => it.str).join(" ");
 
-  if(!file) return toast("Select a PDF first", false);
-
-  const fd = new FormData();
-  fd.append("pdf", file);
-  fd.append("num_flashcards", Math.max(1, Math.min(50, isNaN(n)?10:n)));
-  if (topicEnabled && topic.trim()) {
-    fd.append("topic", topic.trim()); // ✅ only send if checkbox + input filled
+    if (topic) {
+      // Keep only sentences containing the topic
+      const matches = pageText.split(/[.?!]/)
+        .filter(l => l.toLowerCase().includes(topic.toLowerCase()));
+      text += matches.join(". ") + "\n";
+    } else {
+      text += pageText + "\n";
+    }
+    if (text.length > maxChars) break; // stop early
   }
+  return text.slice(0, maxChars);
+}
 
+genBtn.onclick = async () => {
+  const file = pdfInput.files?.[0];
+  const n = parseInt(numInput.value || "10", 10);
+  const topic = document.getElementById("topicInput").value.trim();
+  if (!file) return toast("Select a PDF first", false);
 
-      genBtn.disabled = true; genBtn.innerHTML = '<span class="spinner"></span> Generating...';
-      try{
-        const res = await fetch(`${BASE_URL}/generate_flashcards`, { method:"POST", body:fd });
-        if(!res.ok){
-          const err = await res.json().catch(()=>({detail:"Request failed"}));
-          throw new Error(err.detail || res.statusText);
-        }
-        const data = await res.json();
-        const arr = Array.isArray(data.flashcards) ? data.flashcards :
-                    (typeof data.flashcards === "string" ? JSON.parse(data.flashcards) : []);
-        if(!arr.length) throw new Error("No flashcards returned");
-        flashcards = arr; idx=0; renderCard(); toast(`Generated ${arr.length} cards`);
-      }catch(err){
-        console.error(err);
-        toast(`Error: ${err.message}`, false);
-      }finally{
-        genBtn.disabled = false; genBtn.textContent = "⚙️ Generate from PDF";
-      }
-    };
+  // 🔥 Extract text locally
+  const extractedText = await extractPdfText(file, topic);
+
+  // Send only the text (not file) to backend
+  const fd = new FormData();
+  fd.append("text", extractedText);
+  fd.append("num_flashcards", Math.max(1, Math.min(50, n)));
+  if (topic) fd.append("topic", topic);
+
+  genBtn.disabled = true; genBtn.innerHTML = '<span class="spinner"></span> Generating...';
+  try {
+    const res = await fetch(`${BASE_URL}/generate_flashcards`, { method:"POST", body:fd });
+    const data = await res.json();
+    const arr = Array.isArray(data.flashcards) ? data.flashcards : [];
+    if (!arr.length) throw new Error("No flashcards returned");
+    flashcards = arr; idx = 0; renderCard();
+    toast(`Generated ${arr.length} cards`);
+  } catch (err) {
+    console.error(err);
+    toast("Error: " + err.message, false);
+  } finally {
+    genBtn.disabled = false; genBtn.textContent = "⚙️ Generate from PDF";
+  }
+};
 
     /************ QUIZ MODE ************/
     function startQuiz(){
