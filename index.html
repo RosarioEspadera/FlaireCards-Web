@@ -1,78 +1,452 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Flashcards Generator</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Electronics Flashcards</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 30px;
+    :root{
+      --bg:#fdf6e3; --text:#222; --card:#fff; --accent:#268bd2; --muted:#e6e6e6;
+      --brand:#007acc; --danger:#e74c3c; --ok:#2ecc71;
     }
-    .card {
-      border: 1px solid #ccc;
-      padding: 15px;
-      margin: 10px 0;
-      border-radius: 8px;
-      background: #f9f9f9;
+    body.dark{ --bg:#1f1f1f; --text:#eee; --card:#2b2b2b; --accent:#ffb86c; --muted:#3a3a3a; --brand:#2d7bdc; --danger:#ff6b6b; --ok:#2ecc71; }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      display:flex; min-height:100vh; flex-direction:column
     }
-    .question {
-      font-weight: bold;
+
+    /* Top nav */
+    .top-nav{
+      position:sticky; top:0; z-index:10; display:flex; gap:16px; align-items:center;
+      padding:10px 14px; background:var(--brand); color:#fff; box-shadow:0 2px 6px rgba(0,0,0,.2)
     }
+    .top-nav a{ display:inline-flex; align-items:center; gap:8px; color:#fff; text-decoration:none; font-weight:600 }
+    .top-nav .spacer{ flex:1 }
+    .top-nav button{ background:rgba(255,255,255,.15); border:0; color:#fff; padding:8px 10px; border-radius:8px; cursor:pointer }
+    .top-nav button:hover{ background:rgba(255,255,255,.25) }
+
+    main{ width:100%; max-width:980px; margin:0 auto; padding:18px; flex:1; display:flex; flex-direction:column; align-items:center }
+
+    .toolbar{
+      width:100%; display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; margin:8px 0 16px
+    }
+    select, .btn, input[type="number"], input[type="file"]{
+      padding:10px 12px; border-radius:10px; border:1px solid var(--muted); background:var(--card); color:var(--text);
+      cursor:pointer
+    }
+    input[type="file"]{ cursor:auto }
+    .btn{ min-width:120px }
+    .btn.primary{ background:var(--accent); color:#fff; border-color:transparent }
+    .btn.success{ background:var(--ok); color:#fff; border-color:transparent }
+    .btn.warn{ background:var(--danger); color:#fff; border-color:transparent }
+    .btn:hover{ filter:brightness(0.98) }
+
+    .card{ width:min(92vw, 560px); height:320px; perspective:1200px; margin:10px auto }
+    .card-inner{ position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .6s }
+    .card.flipped .card-inner{ transform:rotateY(180deg) }
+    .card-face{
+      position:absolute; inset:0; display:flex; flex-direction:column; gap:12px; justify-content:center; align-items:center;
+      padding:18px; backface-visibility:hidden; border-radius:16px; background:var(--card);
+      box-shadow:0 8px 22px rgba(0,0,0,.12); text-align:center
+    }
+    .card-back{ transform:rotateY(180deg); background:var(--accent); color:#fff }
+    #qText, #aText { max-width:90%; line-height:1.4; word-wrap:break-word; font-size:1.05rem }
+    .meta{ opacity:.85; font-size:.9rem }
+
+    .controls{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin:10px 0 8px }
+    .progress{ width:min(92vw, 560px); height:8px; background:var(--muted); border-radius:999px; overflow:hidden; margin:8px auto 0 }
+    .progress > div{ height:100%; width:0%; background:var(--accent); transition:width .25s }
+
+    .hint{ font-size:.9rem; opacity:.7; margin-top:6px; text-align:center }
+
+    dialog{ border:none; border-radius:14px; max-width:560px; width:92vw; padding:0; background:var(--card); color:var(--text) }
+    dialog::backdrop{ background:rgba(0,0,0,.4) }
+    .dlg-head{ padding:14px 16px; background:var(--brand); color:#fff; border-top-left-radius:14px; border-top-right-radius:14px; font-weight:700 }
+    .dlg-body{ padding:16px; display:grid; gap:10px }
+    .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px }
+    .grid a{ display:block; padding:10px; border:1px solid var(--muted); border-radius:12px; background:var(--card); text-decoration:none; color:inherit }
+    .dlg-foot{ padding:12px 16px; text-align:right }
+
+    /* Quiz */
+    #quizArea{ width:min(92vw,560px); margin:10px auto; display:none; flex-direction:column; gap:10px }
+    #quizQuestion{ font-size:1.1rem }
+    #quizOptions button{
+      width:100%; padding:10px 12px; border:none; border-radius:10px; background:#f4f4f4; cursor:pointer; text-align:left
+    }
+    #quizOptions button:hover{ background:#e9e9e9 }
+    #quizFeedback{ min-height:22px }
+    .pill{ display:inline-block; padding:2px 8px; border-radius:999px; background:var(--muted); font-size:.8rem }
+    .spinner{ display:inline-block; width:18px; height:18px; border:3px solid var(--muted); border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; vertical-align:-3px }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
+
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+    .grow{ flex:1 1 auto }
+    .sep{ height:1px; background:var(--muted); width:100%; margin:8px 0 }
   </style>
 </head>
 <body>
-  <h1>📘 PDF to Flashcards</h1>
-  
-  <form id="flashcardForm">
-    <label for="pdf">Choose a PDF:</label>
-    <input type="file" id="pdf" name="pdf" accept="application/pdf" required>
-    <br><br>
-    
-    <label for="num">Number of flashcards:</label>
-    <input type="number" id="num" name="num_flashcards" value="5" min="1" max="100">
-    <br><br>
-    
-    <button type="submit">Generate Flashcards</button>
-  </form>
-  
-  <h2>Generated Flashcards</h2>
-  <div id="results"></div>
+  <!-- Top nav -->
+  <nav class="top-nav" role="navigation" aria-label="Primary">
+    <a href="#" id="flashcardsChooser">📚 Flashcards</a>
+    <a href="#" id="openQuiz">📝 Quiz</a>
+    <span class="spacer"></span>
+    <button id="themeBtn" title="Toggle theme">🌓 Theme</button>
+  </nav>
+
+  <main>
+    <h1>Electronics 1 — Flashcards</h1>
+
+    <!-- Controls -->
+    <div class="toolbar">
+      <!-- Local JSON loader -->
+      <button class="btn" id="loadJsonBtn">📥 Load JSON</button>
+
+      <!-- Generate from PDF via backend -->
+      <div class="row">
+        <input type="file" id="pdfInput" accept="application/pdf" />
+        <input type="number" id="numInput" min="1" max="50" value="10" title="Number of flashcards"/>
+        <button class="btn primary" id="genBtn">⚙️ Generate from PDF</button>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="prevBtn">◀ Prev</button>
+        <button class="btn" id="nextBtn">Next ▶</button>
+        <button class="btn" id="shuffleBtn">🔀 Shuffle</button>
+        <button class="btn" id="resetBtn">↺ Reset</button>
+        <button class="btn success" id="quizModeBtn">🧪 Start Quiz</button>
+        <button class="btn warn" id="endQuizBtn" style="display:none;">⛔ End Quiz</button>
+      </div>
+    </div>
+
+    <!-- Flashcard -->
+    <div class="card" id="card" title="Click to flip">
+      <div class="card-inner" id="cardInner">
+        <div class="card-face card-front">
+          <div class="pill">Question</div>
+          <div id="qText">Tap Generate or Load JSON</div>
+          <div class="meta" id="metaFront">Click card to see answer</div>
+        </div>
+        <div class="card-face card-back">
+          <div class="pill">Answer</div>
+          <div id="aText">—</div>
+          <div class="meta" id="metaBack">Click card to flip back</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiz -->
+    <div id="quizArea">
+      <div id="quizQuestion"></div>
+      <div id="quizOptions"></div>
+      <div id="quizFeedback"></div>
+      <div id="quizScore"></div>
+      <button id="quizNextBtn" class="btn">Next</button>
+    </div>
+
+    <div class="controls">
+      <span id="counter">Card 0 / 0</span>
+    </div>
+    <div class="progress"><div id="progressFill"></div></div>
+    <div class="hint">
+      Tip: click the card to flip • long-press “Next” to jump +5 • works offline for viewing
+    </div>
+  </main>
+
+  <!-- Flashcards chooser dialog -->
+  <dialog id="chooserDlg">
+    <div class="dlg-head">Choose Flashcards Subject</div>
+    <div class="dlg-body">
+      <p>Select a subject:</p>
+      <div class="grid">
+        <a href="#" data-json="flashcards.json">Elex1 (flashcards.json)</a>
+        <a href="#" data-json="mse.json">MSE (mse.json)</a>
+      </div>
+      <div class="sep"></div>
+      <div class="row">
+        <input type="file" id="jsonFilePicker" accept="application/json" class="grow" />
+        <button class="btn" id="jsonFileLoad">Load Local JSON</button>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" id="closeChooser">Close</button>
+    </div>
+  </dialog>
 
   <script>
-    document.getElementById("flashcardForm").addEventListener("submit", async (e) => {
+    /************ CONFIG ************/
+    const BASE_URL = "https://flashcards-backend-v36o.onrender.com"; // change if needed
+
+    /************ ELEMENTS ************/
+    const card = document.getElementById("card");
+    const cardInner = document.getElementById("cardInner");
+    const qText = document.getElementById("qText");
+    const aText = document.getElementById("aText");
+    const counter = document.getElementById("counter");
+    const progressFill = document.getElementById("progressFill");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const shuffleBtn = document.getElementById("shuffleBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const loadJsonBtn = document.getElementById("loadJsonBtn");
+    const pdfInput = document.getElementById("pdfInput");
+    const numInput = document.getElementById("numInput");
+    const genBtn = document.getElementById("genBtn");
+    const themeBtn = document.getElementById("themeBtn");
+    const quizArea = document.getElementById("quizArea");
+    const quizQuestion = document.getElementById("quizQuestion");
+    const quizOptions = document.getElementById("quizOptions");
+    const quizFeedback = document.getElementById("quizFeedback");
+    const quizScore = document.getElementById("quizScore");
+    const quizNextBtn = document.getElementById("quizNextBtn");
+    const quizModeBtn = document.getElementById("quizModeBtn");
+    const endQuizBtn = document.getElementById("endQuizBtn");
+    const chooserDlg = document.getElementById("chooserDlg");
+    const flashcardsChooser = document.getElementById("flashcardsChooser");
+    const closeChooser = document.getElementById("closeChooser");
+    const jsonFilePicker = document.getElementById("jsonFilePicker");
+    const jsonFileLoad = document.getElementById("jsonFileLoad");
+    const openQuiz = document.getElementById("openQuiz");
+
+    /************ STATE ************/
+    let flashcards = [];   // [{question, answer}]
+    let idx = 0;
+    let longPressTimer = null;
+    let inQuiz = false;
+    let quizOrder = [];
+    let quizPtr = 0;
+    let score = 0;
+
+    /************ HELPERS ************/
+    const saveState = () => {
+      localStorage.setItem("fc_state", JSON.stringify({
+        idx, flashcards, theme: document.body.classList.contains("dark")
+      }));
+    };
+    const loadState = () => {
+      const raw = localStorage.getItem("fc_state");
+      if(!raw) return;
+      try{
+        const s = JSON.parse(raw);
+        if (Array.isArray(s.flashcards) && s.flashcards.length){
+          flashcards = s.flashcards;
+          idx = Math.min(Math.max(0, s.idx||0), flashcards.length-1);
+        }
+        document.body.classList.toggle("dark", !!s.theme);
+      }catch(e){}
+    };
+
+    const renderCard = () => {
+      if(!flashcards.length){
+        qText.textContent = "Tap Generate or Load JSON";
+        aText.textContent = "—";
+        counter.textContent = "Card 0 / 0";
+        progressFill.style.width = "0%";
+        card.classList.remove("flipped");
+        return;
+      }
+      const f = flashcards[idx];
+      qText.textContent = f.question || "—";
+      aText.textContent = f.answer || "—";
+      counter.textContent = `Card ${idx+1} / ${flashcards.length}`;
+      progressFill.style.width = `${((idx+1)/flashcards.length)*100}%`;
+      card.classList.remove("flipped");
+      saveState();
+    };
+
+    const shuffle = (arr) => {
+      for(let i=arr.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+
+    const toast = (msg, ok=true) => {
+      const el = document.createElement("div");
+      el.textContent = msg;
+      el.style.position="fixed"; el.style.bottom="18px"; el.style.left="50%"; el.style.transform="translateX(-50%)";
+      el.style.padding="10px 14px"; el.style.borderRadius="10px";
+      el.style.color="#fff"; el.style.background = ok ? "var(--ok)" : "var(--danger)";
+      el.style.zIndex=9999; el.style.boxShadow="0 6px 16px rgba(0,0,0,.25)";
+      document.body.appendChild(el);
+      setTimeout(()=>{ el.remove(); }, 1800);
+    };
+
+    /************ FLASHCARD NAV ************/
+    nextBtn.addEventListener("mousedown", () => {
+      longPressTimer = setTimeout(() => {
+        idx = Math.min(flashcards.length-1, idx+5);
+        renderCard();
+        longPressTimer = null;
+      }, 550);
+    });
+    nextBtn.addEventListener("mouseup", () => {
+      if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; idx=(idx+1)%Math.max(1,flashcards.length); renderCard(); }
+    });
+    prevBtn.onclick = () => { idx = (idx-1+flashcards.length)%Math.max(1,flashcards.length); renderCard(); };
+    shuffleBtn.onclick = () => { if(!flashcards.length) return; flashcards = shuffle([...flashcards]); idx = 0; renderCard(); toast("Shuffled"); };
+    resetBtn.onclick = () => { idx = 0; renderCard(); toast("Reset"); };
+    card.onclick = () => card.classList.toggle("flipped");
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      if (inQuiz) return;
+      if (e.key === "ArrowRight") nextBtn.click();
+      if (e.key === "ArrowLeft") prevBtn.click();
+      if (e.key.toLowerCase() === "f") card.click();
+    });
+
+    /************ THEME ************/
+    themeBtn.onclick = () => { document.body.classList.toggle("dark"); saveState(); };
+
+    /************ LOAD JSON (remote file named in chooser, or default "flashcards.json") ************/
+    async function loadJson(url="flashcards.json"){
+      try{
+        const res = await fetch(url);
+        if(!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : (data.flashcards || []);
+        if(!arr.length) throw new Error("No flashcards found");
+        flashcards = arr;
+        idx = 0; renderCard(); toast(`Loaded ${arr.length} cards`);
+      }catch(err){
+        toast("Failed to load JSON", false);
+        console.error(err);
+      }
+    }
+    loadJsonBtn.onclick = () => loadJson();
+
+    /************ CHOOSER DIALOG ************/
+    flashcardsChooser.onclick = (e) => { e.preventDefault(); chooserDlg.showModal(); };
+    closeChooser.onclick = () => chooserDlg.close();
+    chooserDlg.addEventListener("click", (e) => {
+      const a = e.target.closest("a[data-json]");
+      if(!a) return;
       e.preventDefault();
+      loadJson(a.dataset.json);
+      chooserDlg.close();
+    });
+    jsonFileLoad.onclick = async () => {
+      const f = jsonFilePicker.files?.[0];
+      if(!f) return toast("Pick a JSON file", false);
+      try{
+        const text = await f.text();
+        const data = JSON.parse(text);
+        const arr = Array.isArray(data) ? data : (data.flashcards || []);
+        if(!arr.length) throw new Error("No flashcards found");
+        flashcards = arr; idx=0; renderCard(); chooserDlg.close(); toast(`Loaded ${arr.length} local cards`);
+      }catch(err){
+        toast("Invalid JSON", false);
+      }
+    };
 
-      const formData = new FormData();
-      formData.append("pdf", document.getElementById("pdf").files[0]);
-      formData.append("num_flashcards", document.getElementById("num").value);
+    /************ GENERATE FROM PDF (backend) ************/
+    genBtn.onclick = async () => {
+      const file = pdfInput.files?.[0];
+      const n = parseInt(numInput.value||"10", 10);
+      if(!file) return toast("Select a PDF first", false);
+      const fd = new FormData();
+      fd.append("pdf", file);
+      fd.append("num_flashcards", Math.max(1, Math.min(50, isNaN(n)?10:n)));
 
-      const response = await fetch("https://flashcards-backend-v36o.onrender.com/generate_flashcards", {
-        method: "POST",
-        body: formData
+      genBtn.disabled = true; genBtn.innerHTML = '<span class="spinner"></span> Generating...';
+      try{
+        const res = await fetch(`${BASE_URL}/generate_flashcards`, { method:"POST", body:fd });
+        if(!res.ok){
+          const err = await res.json().catch(()=>({detail:"Request failed"}));
+          throw new Error(err.detail || res.statusText);
+        }
+        const data = await res.json();
+        const arr = Array.isArray(data.flashcards) ? data.flashcards :
+                    (typeof data.flashcards === "string" ? JSON.parse(data.flashcards) : []);
+        if(!arr.length) throw new Error("No flashcards returned");
+        flashcards = arr; idx=0; renderCard(); toast(`Generated ${arr.length} cards`);
+      }catch(err){
+        console.error(err);
+        toast(`Error: ${err.message}`, false);
+      }finally{
+        genBtn.disabled = false; genBtn.textContent = "⚙️ Generate from PDF";
+      }
+    };
+
+    /************ QUIZ MODE ************/
+    function startQuiz(){
+      if(!flashcards.length) return toast("Load or generate cards first", false);
+      inQuiz = true; score = 0; quizPtr = 0;
+      quizOrder = shuffle([...Array(flashcards.length).keys()]);
+      quizArea.style.display = "flex";
+      card.style.display = "none";
+      quizModeBtn.style.display="none";
+      endQuizBtn.style.display="inline-block";
+      renderQuizQuestion();
+    }
+    function endQuiz(){
+      inQuiz = false;
+      quizArea.style.display = "none";
+      card.style.display = "";
+      quizModeBtn.style.display="";
+      endQuizBtn.style.display="none";
+      toast("Exited quiz");
+    }
+    function renderQuizQuestion(){
+      const i = quizOrder[quizPtr];
+      const q = flashcards[i].question;
+      const correct = flashcards[i].answer;
+
+      // Build options: correct + 3 random others (unique)
+      const pool = flashcards.map(fc => fc.answer).filter(a => a && a !== correct);
+      shuffle(pool);
+      const options = shuffle([correct, ...pool.slice(0,3)]);
+
+      quizQuestion.textContent = q;
+      quizOptions.innerHTML = "";
+      quizFeedback.textContent = "";
+      quizScore.textContent = `Score: ${score}/${quizPtr}`;
+
+      options.forEach(opt => {
+        const btn = document.createElement("button");
+        btn.textContent = opt;
+        btn.onclick = () => {
+          if(btn.disabled) return;
+          const isRight = (opt === correct);
+          btn.style.background = isRight ? "rgba(46,204,113,.25)" : "rgba(231,76,60,.25)";
+          quizFeedback.textContent = isRight ? "✅ Correct!" : `❌ Correct answer: ${correct}`;
+          if(isRight) score++;
+          // disable all
+          [...quizOptions.children].forEach(b => b.disabled = true);
+          quizScore.textContent = `Score: ${score}/${quizPtr+1}`;
+        };
+        quizOptions.appendChild(btn);
       });
 
-      const data = await response.json();
-      console.log(data);
+      quizNextBtn.onclick = () => {
+        quizPtr++;
+        if(quizPtr >= quizOrder.length){
+          quizFeedback.innerHTML = `🎉 Done! Final Score: <b>${score}/${quizOrder.length}</b>`;
+          quizNextBtn.onclick = null;
+        }else{
+          renderQuizQuestion();
+        }
+      };
+    }
 
-      const container = document.getElementById("results");
-      container.innerHTML = "";
+    quizModeBtn.onclick = startQuiz;
+    endQuizBtn.onclick = endQuiz;
+    openQuiz.onclick = (e) => { e.preventDefault(); startQuiz(); };
 
-      try {
-        // Parse flashcards if backend returned JSON as string
-        const flashcards = typeof data.flashcards === "string"
-          ? JSON.parse(data.flashcards)
-          : data.flashcards;
+    /************ INIT ************/
+    loadState();
+    renderCard();
 
-        flashcards.forEach(fc => {
-          const card = document.createElement("div");
-          card.classList.add("card");
-          card.innerHTML = `<div class="question">Q: ${fc.question}</div><div>A: ${fc.answer}</div>`;
-          container.appendChild(card);
-        });
-      } catch (err) {
-        container.innerHTML = "<p style='color:red;'>Error parsing flashcards!</p>";
+    // If first time, show hint for theme saved state
+    if(!localStorage.getItem("fc_state")){
+      // default theme system preference
+      if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){
+        document.body.classList.add("dark");
       }
-    });
+    }
   </script>
 </body>
 </html>
