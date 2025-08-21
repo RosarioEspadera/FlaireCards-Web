@@ -107,6 +107,8 @@
       <div class="row">
         <input type="file" id="pdfInput" accept="application/pdf" />
         <input type="number" id="numInput" min="1" max="50" value="10" title="Number of flashcards"/>
+        <label for="topic">Topic</label>
+    <input type="text" id="topic" name="topic" placeholder="e.g. Electronics" />
         <button class="btn primary" id="genBtn">⚙️ Generate from PDF</button>
       </div>
 
@@ -344,12 +346,16 @@
 
     /************ GENERATE FROM PDF (backend) ************/
     genBtn.onclick = async () => {
-      const file = pdfInput.files?.[0];
-      const n = parseInt(numInput.value||"10", 10);
-      if(!file) return toast("Select a PDF first", false);
-      const fd = new FormData();
-      fd.append("pdf", file);
-      fd.append("num_flashcards", Math.max(1, Math.min(50, isNaN(n)?10:n)));
+  const file = pdfInput.files?.[0];
+  const n = parseInt(numInput.value||"10", 10);
+  const topic = document.getElementById("topicInput").value;  // ✅ new line
+
+  if(!file) return toast("Select a PDF first", false);
+  const fd = new FormData();
+  fd.append("pdf", file);
+  fd.append("num_flashcards", Math.max(1, Math.min(50, isNaN(n)?10:n)));
+  if (topic.trim()) fd.append("topic", topic.trim());  // ✅ include topic if given
+
 
       genBtn.disabled = true; genBtn.innerHTML = '<span class="spinner"></span> Generating...';
       try{
