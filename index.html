@@ -385,16 +385,17 @@ genBtn.onclick = async () => {
   const topic = document.getElementById("topicInput").value.trim();
   if (!file) return toast("Select a PDF first", false);
 
-  // 🔥 Extract text locally
+  // ✅ Extract locally
   const extractedText = await extractPdfText(file, topic);
 
-  // Send only the text (not file) to backend
+  // ✅ Send extracted text to backend
   const fd = new FormData();
   fd.append("text", extractedText);
   fd.append("num_flashcards", Math.max(1, Math.min(50, n)));
   if (topic) fd.append("topic", topic);
 
-  genBtn.disabled = true; genBtn.innerHTML = '<span class="spinner"></span> Generating...';
+  genBtn.disabled = true;
+  genBtn.innerHTML = '<span class="spinner"></span> Generating...';
   try {
     const res = await fetch(`${BASE_URL}/generate_flashcards`, { method:"POST", body:fd });
     const data = await res.json();
@@ -406,7 +407,8 @@ genBtn.onclick = async () => {
     console.error(err);
     toast("Error: " + err.message, false);
   } finally {
-    genBtn.disabled = false; genBtn.textContent = "⚙️ Generate from PDF";
+    genBtn.disabled = false;
+    genBtn.textContent = "⚙️ Generate from PDF";
   }
 };
 
